@@ -160,6 +160,7 @@ typedef struct redisContext {
 
 } redisContext;
 
+redisContext *redisContextInit(void);
 redisContext *redisConnect(const char *ip, int port);
 redisContext *redisConnectWithTimeout(const char *ip, int port, const struct timeval tv);
 redisContext *redisConnectNonBlock(const char *ip, int port);

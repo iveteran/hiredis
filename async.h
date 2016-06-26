@@ -100,6 +100,11 @@ typedef struct redisAsyncContext {
     } sub;
 } redisAsyncContext;
 
+int redisAsyncConnected(redisAsyncContext *ac);
+redisAsyncContext* redisAsyncContextCreate_ext(void);
+int redisAsyncConnectBlock_ext(redisAsyncContext* ac, const char *ip, int port);
+int redisAsyncReconnectBlock_ext(redisAsyncContext* ac);
+
 /* Functions that proxy to hiredis */
 redisAsyncContext *redisAsyncConnect(const char *ip, int port);
 redisAsyncContext *redisAsyncConnectBind(const char *ip, int port, const char *source_addr);

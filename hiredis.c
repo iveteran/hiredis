@@ -589,7 +589,7 @@ redisReader *redisReaderCreate(void) {
     return redisReaderCreateWithFunctions(&defaultFunctions);
 }
 
-static redisContext *redisContextInit(void) {
+redisContext *redisContextInit(void) {
     redisContext *c;
 
     c = calloc(1,sizeof(redisContext));

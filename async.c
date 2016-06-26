@@ -150,6 +150,11 @@ static void __redisAsyncCopyError(redisAsyncContext *ac) {
     ac->errstr = c->errstr;
 }
 
+int redisAsyncConnected(redisAsyncContext *ac) {
+    redisContext *c = &(ac->c);
+    return c->flags & REDIS_CONNECTED;
+}
+
 redisAsyncContext *redisAsyncConnect(const char *ip, int port) {
     redisContext *c;
     redisAsyncContext *ac;
@@ -166,6 +171,52 @@ redisAsyncContext *redisAsyncConnect(const char *ip, int port) {
 
     __redisAsyncCopyError(ac);
     return ac;
+}
+
+redisAsyncContext* redisAsyncContextCreate_ext(void) {
+    redisContext *c;
+    redisAsyncContext *ac;
+
+    c = redisContextInit();
+    if (c == NULL)
+        return NULL;
+
+    c->flags &= ~REDIS_BLOCK;
+
+    ac = redisAsyncInitialize(c);
+    if (ac == NULL) {
+        redisFree(c);
+        return NULL;
+    }
+
+    __redisAsyncCopyError(ac);
+    return ac;
+}
+
+void redisAsyncContextReset_ext(redisAsyncContext* ac) {
+    ac->err = 0;
+    ac->c.err = 0;
+    ac->c.errstr[0] = '\0';
+    //ac->c.flags |= REDIS_DISCONNECTING;
+    ac->c.flags = 0;
+    ac->c.flags &= ~REDIS_BLOCK;
+}
+
+int redisAsyncConnectBlock_ext(redisAsyncContext* ac, const char *ip, int port) {
+    redisContext *c = &(ac->c);
+    c->flags |= REDIS_BLOCK;
+    int status = redisContextConnectTcp(c,ip,port,NULL);
+    c->flags &= ~REDIS_BLOCK;
+    return status;
+}
+
+int redisAsyncReconnectBlock_ext(redisAsyncContext* ac) {
+    redisAsyncContextReset_ext(ac);
+    redisContext *c = &(ac->c);
+    c->flags |= REDIS_BLOCK;
+    int status = redisReconnect(c);
+    c->flags &= ~REDIS_BLOCK;
+    return status;
 }
 
 redisAsyncContext *redisAsyncConnectBind(const char *ip, int port,
@@ -302,16 +353,6 @@ static void __redisAsyncFree(redisAsyncContext *ac) {
     /* Signal event lib to clean up */
     _EL_CLEANUP(ac);
 
-    /* Execute disconnect callback. When redisAsyncFree() initiated destroying
-     * this context, the status will always be REDIS_OK. */
-    if (ac->onDisconnect && (c->flags & REDIS_CONNECTED)) {
-        if (c->flags & REDIS_FREEING) {
-            ac->onDisconnect(ac,REDIS_OK);
-        } else {
-            ac->onDisconnect(ac,(ac->err == 0) ? REDIS_OK : REDIS_ERR);
-        }
-    }
-
     /* Cleanup self */
     redisFree(c);
 }
@@ -343,9 +384,19 @@ static void __redisAsyncDisconnect(redisAsyncContext *ac) {
         c->flags |= REDIS_DISCONNECTING;
     }
 
+    /* Execute disconnect callback. When redisAsyncFree() initiated destroying
+     * this context, the status will always be REDIS_OK. */
+    if (ac->onDisconnect && (c->flags & REDIS_CONNECTED)) {
+        if (c->flags & REDIS_FREEING) {
+            ac->onDisconnect(ac,REDIS_OK);
+        } else {
+            ac->onDisconnect(ac,(ac->err == 0) ? REDIS_OK : REDIS_ERR);
+        }
+    }
+
     /* For non-clean disconnects, __redisAsyncFree() will execute pending
      * callbacks with a NULL-reply. */
-    __redisAsyncFree(ac);
+    //__redisAsyncFree(ac);
 }
 
 /* Tries to do a clean disconnect from Redis, meaning it stops new commands
